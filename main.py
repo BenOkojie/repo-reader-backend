@@ -1,32 +1,59 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from zipfile import ZipFile, is_zipfile
-from io import BytesIO
+import os, zipfile, tempfile
+from pathlib import Path
+
+from chunks import (
+    load_code_files,
+    split_documents,
+    enrich_chunks_with_embeddings,
+    store_to_mongodb
+)
 
 app = FastAPI()
+
+# CORS middleware for React frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:5173"],  # React dev server
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 @app.post("/collect.zip")
-async def process_zip(file: UploadFile = File(...)):
-    # Read the file bytes into memory
-    contents = await file.read()
+async def upload_zip(file: UploadFile = File(...)):
+    if not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are supported.")
 
-    # Verify it's a valid zip
-    if not is_zipfile(BytesIO(contents)):
-        raise HTTPException(status_code=400, detail="Uploaded file is not a valid .zip archive")
+    try:
+        # 1. Read the uploaded zip file into memory
+        contents = await file.read()
 
-    # Open the zip file in memory
-    with ZipFile(BytesIO(contents)) as zip_file:
-        file_list = zip_file.namelist()  # list of files inside the zip
+        # 2. Create a temporary workspace
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip_path = Path(tmpdir) / "uploaded.zip"
+            extract_dir = Path(tmpdir) / "extracted"
 
-        # Optionally, you can read or extract files like:
-        # with zip_file.open(file_list[0]) as f:
-        #     content = f.read()
+            # 3. Save and extract the ZIP
+            with open(zip_path, "wb") as f:
+                f.write(contents)
 
-    return JSONResponse(content={"filename": file.filename, "files_in_zip": file_list})
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(extract_dir)
+
+            # 4. Run your processing pipeline
+            docs = load_code_files(str(extract_dir))
+            chunks = split_documents(docs)
+            enriched = enrich_chunks_with_embeddings(chunks)
+            store_to_mongodb(enriched)
+
+        return {
+            "status": "success",
+            "chunks_stored": len(enriched),
+            "message": f"Zip processed and discarded. Chunks stored in MongoDB."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing ZIP: {e}")
