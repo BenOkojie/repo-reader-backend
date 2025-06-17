@@ -15,13 +15,15 @@ app = FastAPI()
 # CORS middleware for React frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173","*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
+@app.get("/")
+def root():
+    print("Root route hit!")
+    return {"message": "Hello from root"}
 @app.post("/collect.zip")
 async def upload_zip(file: UploadFile = File(...)):
     if not file.filename.endswith(".zip"):
@@ -44,9 +46,13 @@ async def upload_zip(file: UploadFile = File(...)):
                 zip_ref.extractall(extract_dir)
 
             # 4. Run your processing pipeline
+            print("pipeline 1")
             docs = load_code_files(str(extract_dir))
+            print("pipeline 2")
             chunks = split_documents(docs)
+            print("pipeline 3")
             enriched = enrich_chunks_with_embeddings(chunks)
+            print("pipeline 4")
             store_to_mongodb(enriched)
 
         return {
@@ -56,4 +62,8 @@ async def upload_zip(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing ZIP: {e}")
+        import traceback
+        print("An error occurred during ZIP processing:")
+        # print(e)
+        # traceback.print_exc()  # This prints the full traceback
+        raise HTTPException(status_code=500, detail=f"Error processing ZIP:  why")

@@ -28,6 +28,7 @@ def load_code_files(directory: str) -> List[Document]:
 
     all_docs = []
     for ext in supported_extensions:
+        print("there's a file")
         loader = DirectoryLoader(
             path=directory,
             glob=f"**/*{ext}",
@@ -39,7 +40,7 @@ def load_code_files(directory: str) -> List[Document]:
             all_docs.extend(loader.load())
         except Exception as e:
             print(f"Warning: Failed to load some {ext} files — {e}")
-
+    print(all_docs)
     return all_docs
 
 
@@ -55,6 +56,7 @@ def enrich_chunks_with_embeddings(chunks: List[Document]):
     enriched = []
     for chunk in chunks:
         embedding = embed_chunk_with_gemini(chunk.page_content)
+        print("Embedding type:", type(embedding[0]))
         enriched.append({
             "text": chunk.page_content,
             "embedding": embedding,
