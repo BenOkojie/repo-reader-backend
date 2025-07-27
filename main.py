@@ -12,58 +12,70 @@ from chunks import (
 
 app = FastAPI()
 
-# CORS middleware for React frontend access
+# CORS for local React dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173","*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 @app.get("/")
 def root():
-    print("Root route hit!")
-    return {"message": "Hello from root"}
-@app.post("/collect.zip")
-async def upload_zip(file: UploadFile = File(...)):
-    if not file.filename.endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Only .zip files are supported.")
+    return {"message": "Hello from FastAPI"}
 
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
     try:
-        # 1. Read the uploaded zip file into memory
         contents = await file.read()
 
-        # 2. Create a temporary workspace
         with tempfile.TemporaryDirectory() as tmpdir:
-            zip_path = Path(tmpdir) / "uploaded.zip"
-            extract_dir = Path(tmpdir) / "extracted"
+            temp_path = Path(tmpdir)
+            extracted_dir = temp_path / "extracted"
+            extracted_dir.mkdir(exist_ok=True)
 
-            # 3. Save and extract the ZIP
-            with open(zip_path, "wb") as f:
-                f.write(contents)
+            if file.filename.endswith(".zip"):
+                # Save and extract zip file
+                zip_path = temp_path / "uploaded.zip"
+                with open(zip_path, "wb") as f:
+                    f.write(contents)
 
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(extract_dir)
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                    zip_ref.extractall(extracted_dir)
 
-            # 4. Run your processing pipeline
-            print("pipeline 1")
-            docs = load_code_files(str(extract_dir))
-            print("pipeline 2")
+                target_path = extracted_dir  # Process extracted files
+
+            else:
+                # Save single file
+                file_path = extracted_dir / file.filename
+                with open(file_path, "wb") as f:
+                    f.write(contents)
+
+                target_path = file_path  # Process the single file
+
+            # Run pipeline
+            print("Loading files...")
+            docs = load_code_files(str(target_path))
+
+            print("Splitting...")
             chunks = split_documents(docs)
-            print("pipeline 3")
+
+            print("Embedding...")
             enriched = enrich_chunks_with_embeddings(chunks)
-            print("pipeline 4")
+
+            print("Storing to MongoDB...")
             store_to_mongodb(enriched)
 
         return {
             "status": "success",
+            "file_type": "zip" if file.filename.endswith(".zip") else "single file",
             "chunks_stored": len(enriched),
-            "message": f"Zip processed and discarded. Chunks stored in MongoDB."
+            "message": f"{file.filename} processed and stored."
         }
 
     except Exception as e:
+        print("An error occurred during file processing:")
         import traceback
-        print("An error occurred during ZIP processing:")
-        # print(e)
-        # traceback.print_exc()  # This prints the full traceback
-        raise HTTPException(status_code=500, detail=f"Error processing ZIP:  why")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
