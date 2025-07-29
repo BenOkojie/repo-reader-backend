@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os, zipfile, tempfile
 from pathlib import Path
-
+from chat import router as chat_router
 from chunks import (
     load_code_files,
     split_documents,
@@ -20,7 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+app.include_router(chat_router)
 @app.get("/")
 def root():
     return {"message": "Hello from FastAPI"}

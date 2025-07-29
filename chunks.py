@@ -8,7 +8,7 @@ from langchain_community.document_loaders import TextLoader, DirectoryLoader, Py
 # from langchain.document_loaders import , TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-
+from sentence_transformers import SentenceTransformer
 from gemini import embed_chunk_with_gemini
 from pymongo import MongoClient
 
@@ -65,7 +65,7 @@ def load_code_files(directory: str) -> List[Document]:
     return all_docs
 
 
-def split_documents(documents: List[Document], chunk_size=500, chunk_overlap=100) -> List[Document]:
+def split_documents(documents: List[Document], chunk_size=400, chunk_overlap=80) -> List[Document]:
     enriched_docs = []
 
     for doc in documents:
@@ -100,16 +100,23 @@ def split_documents(documents: List[Document], chunk_size=500, chunk_overlap=100
 
 
 def enrich_chunks_with_embeddings(chunks: List[Document]):
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    print(f"Generating embeddings for {len(chunks)} chunks...")
+
+    texts = [chunk.page_content for chunk in chunks]
+    embeddings = model.encode(texts, batch_size=32, show_progress_bar=True)
+
     enriched = []
-    for chunk in chunks:
-        embedding = embed_chunk_with_gemini(chunk.page_content)
-        print("Embedding type:", type(embedding[0]))
+    for chunk, embedding in zip(chunks, embeddings):
         enriched.append({
             "text": chunk.page_content,
-            "embedding": embedding,
+            "embedding": embedding.tolist(),  # Needed for MongoDB storage
             "metadata": chunk.metadata
         })
+
     return enriched
+
 
 
 def store_to_mongodb(records: List[dict]):

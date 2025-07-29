@@ -16,12 +16,6 @@ def embed_chunk_with_gemini(text: str) -> list[float]:
             contents=text,  # ✅ Use the actual text chunk!
             config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")
         )
-        # print(result.values)
-        # ✅ Extract the embedding vector (list of floats)
-        # embedding = result.embedding.values  # or whatever field holds the float list
-        
-        # print("Generated embedding type:", type(embedding))
-        # print("Generated embedding preview:", embedding[:5])
 
         return result.embeddings[0].values
 
@@ -29,6 +23,17 @@ def embed_chunk_with_gemini(text: str) -> list[float]:
         print("❌ Error generating embedding:", e)
         return []
 
+def get_llm_response(prompt: str) -> str:
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    try:
+        response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
+    )
+        return response.text
+    except Exception as e:
+        print("❌ Error generating Gemini response:", e)
+        return "[Error generating response]"
 
     # try:
     #     response = genai.embed_content(
