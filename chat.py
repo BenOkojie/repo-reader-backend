@@ -49,7 +49,7 @@ async def rag_demo_stream(request: Request):
 
         # 2. Fetch and search chunks
         all_chunks = list(collection.find({}, {"_id": 0, "text": 1, "embedding": 1}))
-        chunks = search_top_chunks(query_emb, all_chunks, k=3, threshold=0.3)
+        chunks = search_top_chunks(query_emb, all_chunks, k=5, threshold=0.2)
 
         if not chunks:
             yield json.dumps({
